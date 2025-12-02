@@ -20,6 +20,7 @@ type ApplicationRepository interface {
 	GetByID(ctx context.Context, id string) (*model.Application, error)
 	GetByClientID(ctx context.Context, clientID string) (*model.Application, error)
 	Update(ctx context.Context, app *model.Application) error
+	UpdateSecret(ctx context.Context, id string, secretHash string) error
 	Delete(ctx context.Context, id string) error
 	List(ctx context.Context, filter *AppFilter, page *Pagination) ([]*model.Application, int64, error)
 	ListByOrgID(ctx context.Context, orgID string, page *Pagination) ([]*model.Application, int64, error)
@@ -87,16 +88,30 @@ func (r *applicationRepository) GetByClientID(ctx context.Context, clientID stri
 
 // Update 更新应用
 func (r *applicationRepository) Update(ctx context.Context, app *model.Application) error {
-	result := r.db.WithContext(ctx).Model(app).Updates(map[string]interface{}{
-		"name":               app.Name,
-		"description":        app.Description,
-		"redirect_uris":      app.RedirectURIs,
-		"allowed_scopes":     app.AllowedScopes,
-		"oauth_version":      app.OAuthVersion,
-		"protocol":           app.Protocol,
-		"status":             app.Status,
-		"client_secret_hash": app.ClientSecretHash,
-	})
+	// 使用 GORM 的 Save 方法，自动处理字段映射，兼容 PostgreSQL 和 MySQL
+	result := r.db.WithContext(ctx).Model(app).Select(
+		"name",
+		"description",
+		"redirect_uris",
+		"allowed_scopes",
+		"protocol",
+		"status",
+		"client_secret_hash",
+	).Updates(app)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return ErrAppNotFound
+	}
+	return nil
+}
+
+// UpdateSecret 仅更新 Client Secret（用于重置密钥）
+func (r *applicationRepository) UpdateSecret(ctx context.Context, id string, secretHash string) error {
+	result := r.db.WithContext(ctx).Model(&model.Application{}).
+		Where("id = ?", id).
+		Update("client_secret_hash", secretHash)
 	if result.Error != nil {
 		return result.Error
 	}

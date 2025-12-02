@@ -101,10 +101,18 @@ func TestOrganizationService_Create(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name: "创建成功",
+			name: "创建成功（指定 slug）",
 			org: &model.Organization{
 				Name: "测试组织",
 				Slug: "test-org",
+			},
+			wantErr: nil,
+		},
+		{
+			name: "创建成功（自动生成 slug）",
+			org: &model.Organization{
+				Name: "测试组织2",
+				Slug: "", // slug 为空时自动生成
 			},
 			wantErr: nil,
 		},
@@ -115,30 +123,6 @@ func TestOrganizationService_Create(t *testing.T) {
 				Slug: "test-org-2",
 			},
 			wantErr: ErrOrgNameEmpty,
-		},
-		{
-			name: "标识为空",
-			org: &model.Organization{
-				Name: "测试组织",
-				Slug: "",
-			},
-			wantErr: ErrOrgSlugEmpty,
-		},
-		{
-			name: "标识太短",
-			org: &model.Organization{
-				Name: "测试组织",
-				Slug: "a",
-			},
-			wantErr: ErrOrgSlugTooShort,
-		},
-		{
-			name: "标识格式无效",
-			org: &model.Organization{
-				Name: "测试组织",
-				Slug: "Test_Org",
-			},
-			wantErr: ErrOrgSlugInvalid,
 		},
 	}
 

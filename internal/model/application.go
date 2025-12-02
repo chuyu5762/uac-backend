@@ -14,7 +14,7 @@ import (
 // 应用属于组织，继承组织的品牌配置
 type Application struct {
 	BaseModel
-	OrgID            string      `gorm:"type:char(36);index;not null" json:"org_id"`        // 所属组织 ID
+	OrgID            *string     `gorm:"type:char(36);index" json:"org_id"`                 // 所属组织 ID；NULL 表示系统级应用
 	Name             string      `gorm:"type:varchar(255);not null" json:"name"`            // 应用名称
 	ClientID         string      `gorm:"type:varchar(64);uniqueIndex" json:"client_id"`     // OAuth Client ID
 	ClientSecretHash string      `gorm:"type:varchar(255)" json:"-"`                        // Client Secret 哈希

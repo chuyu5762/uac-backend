@@ -13,15 +13,20 @@ type AuthHandler struct {
 	userService  service.UserService
 	authService  service.AuthService
 	tokenService service.TokenService
+	rbacService  service.RBACService
 }
 
 // NewAuthHandler 创建认证处理器
-func NewAuthHandler(userSvc service.UserService, authSvc service.AuthService, tokenSvc service.TokenService) *AuthHandler {
-	return &AuthHandler{
+func NewAuthHandler(userSvc service.UserService, authSvc service.AuthService, tokenSvc service.TokenService, rbacSvc ...service.RBACService) *AuthHandler {
+	h := &AuthHandler{
 		userService:  userSvc,
 		authService:  authSvc,
 		tokenService: tokenSvc,
 	}
+	if len(rbacSvc) > 0 {
+		h.rbacService = rbacSvc[0]
+	}
+	return h
 }
 
 // RegisterRequest 注册请求
@@ -83,6 +88,19 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		}
 		response.Error(c, response.CodeServerError)
 		return
+	}
+
+	// 为新用户分配角色
+	if h.rbacService != nil {
+		// 检查是否是第一个用户（分配超级管理员角色）
+		users, total, _ := h.userService.List(c.Request.Context(), nil, nil)
+		if total == 1 && len(users) == 1 {
+			// 第一个用户，分配超级管理员角色
+			h.rbacService.AssignRoleByCode(c.Request.Context(), user.ID, model.RoleSuperAdmin)
+		} else {
+			// 其他用户，分配普通用户角色
+			h.rbacService.AssignRoleByCode(c.Request.Context(), user.ID, model.RoleUser)
+		}
 	}
 
 	response.Success(c, gin.H{

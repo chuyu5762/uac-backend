@@ -64,7 +64,7 @@ func (m *mockAppRepository) Delete(ctx context.Context, id string) error {
 func (m *mockAppRepository) List(ctx context.Context, filter *repository.AppFilter, page *repository.Pagination) ([]*model.Application, int64, error) {
 	var result []*model.Application
 	for _, app := range m.apps {
-		if filter != nil && filter.OrgID != "" && app.OrgID != filter.OrgID {
+		if filter != nil && filter.OrgID != "" && (app.OrgID == nil || *app.OrgID != filter.OrgID) {
 			continue
 		}
 		result = append(result, app)
@@ -84,11 +84,19 @@ func (m *mockAppRepository) ExistsByClientID(ctx context.Context, clientID strin
 func (m *mockAppRepository) CountByOrgID(ctx context.Context, orgID string) (int64, error) {
 	var count int64
 	for _, app := range m.apps {
-		if app.OrgID == orgID {
+		if app.OrgID != nil && *app.OrgID == orgID {
 			count++
 		}
 	}
 	return count, nil
+}
+
+func (m *mockAppRepository) UpdateSecret(ctx context.Context, id string, secretHash string) error {
+	if app, exists := m.apps[id]; exists {
+		app.ClientSecretHash = secretHash
+		return nil
+	}
+	return repository.ErrAppNotFound
 }
 
 func TestAppService_Create(t *testing.T) {
@@ -101,7 +109,7 @@ func TestAppService_Create(t *testing.T) {
 	orgSvc := NewOrganizationService(orgRepo)
 	_ = orgSvc.Create(ctx, org)
 
-	app := &model.Application{Name: "测试应用", OrgID: org.ID}
+	app := &model.Application{Name: "测试应用", OrgID: &org.ID}
 	secret, err := svc.Create(ctx, app)
 	if err != nil {
 		t.Errorf("创建应用失败: %v", err)
@@ -124,7 +132,7 @@ func TestAppService_ResetSecret(t *testing.T) {
 	orgSvc := NewOrganizationService(orgRepo)
 	_ = orgSvc.Create(ctx, org)
 
-	app := &model.Application{Name: "测试应用", OrgID: org.ID}
+	app := &model.Application{Name: "测试应用", OrgID: &org.ID}
 	oldSecret, _ := svc.Create(ctx, app)
 
 	newSecret, err := svc.ResetSecret(ctx, app.ID)

@@ -10,26 +10,26 @@ database:
   driver: "postgres"  # postgres 或 mysql
   
   postgres:
-    host: "localhost"
+    host: "1.95.88.239"
     port: 5432
-    user: "postgres"
-    password: ""
-    dbname: "unified_auth"
+    user: "uac"
+    password: "j4x3mdzttNnanCsB"
+    dbname: "uac"
     sslmode: "disable"
     
   mysql:
-    host: "localhost"
+    host: "1.95.88.239"
     port: 3306
-    user: "root"
-    password: ""
-    dbname: "unified_auth"
+    user: "uac"
+    password: "j4x3mdzttNnanCsB"
+    dbname: "uac"
     charset: "utf8mb4"
     parse_time: true
     loc: "Local"
 
 redis:
-  addr: "localhost:6379"
-  password: ""
+  addr: "1.95.88.239:6379"
+  password: "123456"
   db: 0
 
 jwt:

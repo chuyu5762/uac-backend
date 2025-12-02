@@ -42,10 +42,11 @@ const (
 	CodePKCEFailed           = 30006 // PKCE 验证失败
 
 	// 资源不存在 40xxx
-	CodeUserNotFound = 40001 // 用户不存在
-	CodeOrgNotFound  = 40002 // 组织不存在
-	CodeAppNotFound  = 40003 // 应用不存在
-	CodeRoleNotFound = 40004 // 角色不存在
+	CodeUserNotFound       = 40001 // 用户不存在
+	CodeOrgNotFound        = 40002 // 组织不存在
+	CodeAppNotFound        = 40003 // 应用不存在
+	CodeRoleNotFound       = 40004 // 角色不存在
+	CodePermissionNotFound = 40005 // 权限不存在
 
 	// 冲突错误 50xxx
 	CodeUserExists  = 50001 // 该用户名已被注册
@@ -82,6 +83,7 @@ var codeMessages = map[int]string{
 	CodeOrgNotFound:          "组织不存在",
 	CodeAppNotFound:          "应用不存在",
 	CodeRoleNotFound:         "角色不存在",
+	CodePermissionNotFound:   "权限不存在",
 	CodeUserExists:           "该用户名已被注册",
 	CodeEmailExists:          "该邮箱已被注册",
 	CodePhoneExists:          "该手机号已被注册",

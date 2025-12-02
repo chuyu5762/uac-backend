@@ -4,10 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -51,6 +54,9 @@ func main() {
 		&model.Organization{},
 		&model.Application{},
 		&model.UserOrgBinding{},
+		&model.Role{},
+		&model.Permission{},
+		&model.UserRole{},
 	); err != nil {
 		log.Fatalf("数据库迁移失败: %v", err)
 	}
@@ -61,11 +67,12 @@ func main() {
 	orgRepo := repository.NewOrganizationRepository(database.GetDB())
 	bindingRepo := repository.NewUserOrgBindingRepository(database.GetDB())
 
-	// 生成 RSA 密钥对（生产环境应从配置文件加载）
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	// 加载或生成 RSA 密钥对
+	privateKey, err := loadOrGenerateRSAKey(cfg.JWT.PrivateKeyPath, cfg.JWT.PublicKeyPath)
 	if err != nil {
-		log.Fatalf("生成 RSA 密钥失败: %v", err)
+		log.Fatalf("加载 RSA 密钥失败: %v", err)
 	}
+	log.Println("RSA 密钥加载成功")
 
 	// 初始化 Service
 	userService := service.NewUserService(userRepo, bindingRepo, orgRepo)
@@ -87,10 +94,30 @@ func main() {
 	// 初始化会话服务
 	sessionService := service.NewSessionService(redis.GetClient(), nil)
 
+	// 初始化 RBAC 服务
+	roleRepo := repository.NewRoleRepository(database.GetDB())
+	permRepo := repository.NewPermissionRepository(database.GetDB())
+	userRoleRepo := repository.NewUserRoleRepository(database.GetDB())
+	rbacService := service.NewRBACService(roleRepo, permRepo, userRoleRepo)
+
+	// 初始化默认角色和权限
+	if err := rbacService.InitDefaultRolesAndPermissions(context.Background()); err != nil {
+		log.Printf("初始化默认角色和权限失败: %v", err)
+	} else {
+		log.Println("默认角色和权限初始化完成")
+	}
+
+	// 初始化组织服务
+	orgService := service.NewOrganizationService(orgRepo)
+
 	// 初始化 Handler
-	authHandler := handler.NewAuthHandler(userService, authService, tokenService)
+	authHandler := handler.NewAuthHandler(userService, authService, tokenService, rbacService)
 	oauthHandler := handler.NewOAuthHandler(appService, tokenService, sessionService)
 	oidcHandler := handler.NewOIDCHandler(userService, tokenService, cfg.JWT.Issuer)
+	rbacHandler := handler.NewRBACHandler(rbacService)
+	userHandler := handler.NewUserHandler(userService)
+	appHandler := handler.NewAppHandler(appService)
+	orgHandler := handler.NewOrgHandler(orgService)
 
 	// 设置 Gin 模式
 	if cfg.Server.Mode == "release" {
@@ -151,6 +178,76 @@ func main() {
 		{
 			authRequired.POST("/auth/logout", authHandler.Logout)
 			authRequired.GET("/auth/me", authHandler.GetCurrentUser)
+			authRequired.PUT("/auth/me", userHandler.UpdateCurrentUser)
+			authRequired.POST("/auth/change-password", userHandler.ChangePassword)
+			authRequired.GET("/auth/permissions", rbacHandler.GetCurrentUserPermissions)
+		}
+
+		// 用户管理路由（需要管理员权限）
+		users := api.Group("/users")
+		users.Use(middleware.JWTAuth(tokenService))
+		users.Use(middleware.RequireAnyRole(rbacService, model.RoleSuperAdmin, model.RoleOrgAdmin))
+		{
+			users.GET("", userHandler.ListUsers)
+			users.GET("/:id", userHandler.GetUser)
+			users.POST("", userHandler.CreateUser)
+			users.PUT("/:id", userHandler.UpdateUser)
+			users.DELETE("/:id", userHandler.DeleteUser)
+		}
+
+		// 应用管理路由（需要管理员权限）
+		apps := api.Group("/apps")
+		apps.Use(middleware.JWTAuth(tokenService))
+		apps.Use(middleware.RequireAnyRole(rbacService, model.RoleSuperAdmin, model.RoleOrgAdmin))
+		{
+			apps.GET("", appHandler.ListApps)
+			apps.GET("/:id", appHandler.GetApp)
+			apps.POST("", appHandler.CreateApp)
+			apps.PUT("/:id", appHandler.UpdateApp)
+			apps.DELETE("/:id", appHandler.DeleteApp)
+			apps.POST("/:id/reset-secret", appHandler.ResetSecret)
+		}
+
+		// 组织管理路由（需要管理员权限）
+		orgs := api.Group("/orgs")
+		orgs.Use(middleware.JWTAuth(tokenService))
+		orgs.Use(middleware.RequireAnyRole(rbacService, model.RoleSuperAdmin, model.RoleOrgAdmin))
+		{
+			orgs.GET("", orgHandler.ListOrgs)
+			orgs.GET("/:id", orgHandler.GetOrg)
+			orgs.POST("", orgHandler.CreateOrg)
+			orgs.PUT("/:id", orgHandler.UpdateOrg)
+			orgs.DELETE("/:id", orgHandler.DeleteOrg)
+			orgs.PUT("/:id/branding", orgHandler.UpdateBranding)
+		}
+
+		// RBAC 管理路由（需要管理员权限）
+		rbac := api.Group("")
+		rbac.Use(middleware.JWTAuth(tokenService))
+		rbac.Use(middleware.RequireAnyRole(rbacService, model.RoleSuperAdmin, model.RoleOrgAdmin))
+		{
+			// 角色管理
+			rbac.POST("/roles", rbacHandler.CreateRole)
+			rbac.GET("/roles", rbacHandler.ListRoles)
+			rbac.GET("/roles/:id", rbacHandler.GetRole)
+			rbac.PUT("/roles/:id", rbacHandler.UpdateRole)
+			rbac.DELETE("/roles/:id", rbacHandler.DeleteRole)
+			rbac.POST("/roles/:id/permissions", rbacHandler.AddPermissionsToRole)
+			rbac.DELETE("/roles/:id/permissions", rbacHandler.RemovePermissionsFromRole)
+
+			// 权限管理
+			rbac.GET("/permissions", rbacHandler.ListPermissions)
+			rbac.GET("/permissions/:id", rbacHandler.GetPermission)
+			rbac.POST("/permissions", rbacHandler.CreatePermission)
+			rbac.DELETE("/permissions/:id", rbacHandler.DeletePermission)
+
+			// 获取角色权限
+			rbac.GET("/roles/:id/permissions", rbacHandler.GetRolePermissions)
+
+			// 用户角色管理（使用不同的路径避免冲突）
+			rbac.GET("/user-roles/:user_id", rbacHandler.GetUserRoles)
+			rbac.POST("/user-roles/:user_id", rbacHandler.AssignRole)
+			rbac.DELETE("/user-roles/:user_id/:role_id", rbacHandler.RevokeRole)
 		}
 	}
 
@@ -223,4 +320,99 @@ func main() {
 	redis.Close()
 
 	log.Println("服务已关闭")
+}
+
+// loadOrGenerateRSAKey 加载或生成 RSA 密钥对
+// 如果密钥文件存在则加载，否则生成新密钥并保存到文件
+func loadOrGenerateRSAKey(privateKeyPath, publicKeyPath string) (*rsa.PrivateKey, error) {
+	// 尝试加载已有的私钥
+	if privateKeyPath != "" {
+		if privateKeyData, err := os.ReadFile(privateKeyPath); err == nil {
+			block, _ := pem.Decode(privateKeyData)
+			if block != nil && block.Type == "RSA PRIVATE KEY" {
+				privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+				if err == nil {
+					log.Printf("从文件加载 RSA 私钥: %s", privateKeyPath)
+					return privateKey, nil
+				}
+			}
+		}
+	}
+
+	// 生成新的密钥对
+	log.Println("生成新的 RSA 密钥对...")
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, err
+	}
+
+	// 保存私钥到文件
+	if privateKeyPath != "" {
+		if err := savePrivateKey(privateKeyPath, privateKey); err != nil {
+			log.Printf("警告: 保存私钥失败: %v", err)
+		} else {
+			log.Printf("RSA 私钥已保存到: %s", privateKeyPath)
+		}
+	}
+
+	// 保存公钥到文件
+	if publicKeyPath != "" {
+		if err := savePublicKey(publicKeyPath, &privateKey.PublicKey); err != nil {
+			log.Printf("警告: 保存公钥失败: %v", err)
+		} else {
+			log.Printf("RSA 公钥已保存到: %s", publicKeyPath)
+		}
+	}
+
+	return privateKey, nil
+}
+
+// savePrivateKey 保存私钥到 PEM 文件
+func savePrivateKey(path string, key *rsa.PrivateKey) error {
+	// 确保目录存在
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	keyBytes := x509.MarshalPKCS1PrivateKey(key)
+	block := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: keyBytes,
+	}
+
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return pem.Encode(file, block)
+}
+
+// savePublicKey 保存公钥到 PEM 文件
+func savePublicKey(path string, key *rsa.PublicKey) error {
+	// 确保目录存在
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	keyBytes, err := x509.MarshalPKIXPublicKey(key)
+	if err != nil {
+		return err
+	}
+
+	block := &pem.Block{
+		Type:  "PUBLIC KEY",
+		Bytes: keyBytes,
+	}
+
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	return pem.Encode(file, block)
 }

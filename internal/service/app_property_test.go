@@ -43,7 +43,7 @@ func TestProperty_ClientSecretResetInvalidatesOld(t *testing.T) {
 				return true
 			}
 
-			app := &model.Application{Name: appName, OrgID: org.ID}
+			app := &model.Application{Name: appName, OrgID: &org.ID}
 			oldSecret, err := svc.Create(ctx, app)
 			if err != nil {
 				return true

@@ -44,9 +44,15 @@ func (s *appService) Create(ctx context.Context, app *model.Application) (string
 	if err := s.validateApp(app); err != nil {
 		return "", err
 	}
-	if s.orgRepo != nil {
-		if _, err := s.orgRepo.GetByID(ctx, app.OrgID); err != nil {
+	// 只有当指定了组织 ID 时才验证组织是否存在（支持系统级应用）
+	if s.orgRepo != nil && app.OrgID != nil && *app.OrgID != "" {
+		if _, err := s.orgRepo.GetByID(ctx, *app.OrgID); err != nil {
 			return "", errors.New("组织不存在")
+		}
+	} else {
+		// 系统级应用：将空串标准化为 NULL
+		if app.OrgID != nil && *app.OrgID == "" {
+			app.OrgID = nil
 		}
 	}
 
@@ -98,6 +104,10 @@ func (s *appService) Update(ctx context.Context, app *model.Application) error {
 	if app.Name == "" {
 		return ErrAppNameEmpty
 	}
+	// 标准化系统级应用的 OrgID
+	if app.OrgID != nil && *app.OrgID == "" {
+		app.OrgID = nil
+	}
 	return s.repo.Update(ctx, app)
 }
 
@@ -126,18 +136,22 @@ func (s *appService) ResetSecret(ctx context.Context, id string) (string, error)
 	if id == "" {
 		return "", ErrAppIDEmpty
 	}
-	app, err := s.repo.GetByID(ctx, id)
-	if err != nil {
+	// 先检查应用是否存在
+	if _, err := s.repo.GetByID(ctx, id); err != nil {
 		return "", err
 	}
+	// 生成新密钥
 	newSecret, err := model.GenerateClientSecret()
 	if err != nil {
 		return "", errors.New("生成 Client Secret 失败")
 	}
-	if err := app.SetClientSecret(newSecret); err != nil {
+	// 创建临时对象用于生成哈希
+	tempApp := &model.Application{}
+	if err := tempApp.SetClientSecret(newSecret); err != nil {
 		return "", errors.New("加密 Client Secret 失败")
 	}
-	if err := s.repo.Update(ctx, app); err != nil {
+	// 仅更新密钥哈希字段
+	if err := s.repo.UpdateSecret(ctx, id, tempApp.ClientSecretHash); err != nil {
 		return "", err
 	}
 	return newSecret, nil
@@ -176,8 +190,6 @@ func (s *appService) validateApp(app *model.Application) error {
 	if app.Name == "" {
 		return ErrAppNameEmpty
 	}
-	if app.OrgID == "" {
-		return ErrAppOrgIDEmpty
-	}
+	// OrgID 可以为空，表示系统级应用
 	return nil
 }
