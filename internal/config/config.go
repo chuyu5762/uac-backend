@@ -13,6 +13,17 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	Redis    RedisConfig    `mapstructure:"redis"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
+	Static   StaticConfig   `mapstructure:"static"`
+}
+
+// StaticConfig 静态文件配置
+type StaticConfig struct {
+	// Enabled 是否启用静态文件服务
+	Enabled bool `mapstructure:"enabled"`
+	// Mode 服务模式：embed（嵌入）或 disk（磁盘）
+	Mode string `mapstructure:"mode"`
+	// Path 磁盘模式下的文件路径
+	Path string `mapstructure:"path"`
 }
 
 // 全局配置实例
@@ -165,4 +176,9 @@ func setDefaults() {
 	viper.SetDefault("jwt.issuer", "unified-auth-center")
 	viper.SetDefault("jwt.access_expiry", "2h")
 	viper.SetDefault("jwt.refresh_expiry", "168h")
+
+	// 静态文件默认配置
+	viper.SetDefault("static.enabled", true)
+	viper.SetDefault("static.mode", "embed")
+	viper.SetDefault("static.path", "./web/dist")
 }

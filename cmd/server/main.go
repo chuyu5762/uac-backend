@@ -21,6 +21,7 @@ import (
 	"github.com/pu-ac-cn/uac-backend/internal/repository"
 	"github.com/pu-ac-cn/uac-backend/internal/service"
 	"github.com/pu-ac-cn/uac-backend/pkg/response"
+	"github.com/pu-ac-cn/uac-backend/web"
 )
 
 func main() {
@@ -166,6 +167,25 @@ func main() {
 	// OIDC 发现端点
 	router.GET("/.well-known/openid-configuration", oidcHandler.Discovery)
 	router.GET("/.well-known/jwks.json", oidcHandler.JWKS)
+
+	// 静态文件服务（前端嵌入）
+	if cfg.Static.Enabled {
+		staticMode := web.ModeEmbed
+		if cfg.Static.Mode == "disk" {
+			staticMode = web.ModeDisk
+		}
+
+		staticHandler := web.NewStaticHandler(&web.StaticConfig{
+			Mode:      staticMode,
+			DiskPath:  cfg.Static.Path,
+			IndexFile: "index.html",
+			APIPrefix: []string{"/api/", "/oauth/", "/.well-known/", "/health"},
+		})
+
+		// 设置静态文件路由和 SPA 处理
+		staticHandler.SetupRoutes(router)
+		log.Printf("静态文件服务已启用，模式: %s", cfg.Static.Mode)
+	}
 
 	// 创建 HTTP 服务器
 	srv := &http.Server{

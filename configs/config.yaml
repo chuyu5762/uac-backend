@@ -38,3 +38,9 @@ jwt:
   issuer: "unified-auth-center"
   access_expiry: "2h"
   refresh_expiry: "168h"  # 7 天
+
+# 静态文件配置（前端嵌入）
+static:
+  enabled: true           # 是否启用静态文件服务
+  mode: "embed"           # embed（嵌入到二进制）或 disk（从磁盘读取）
+  path: "./web/dist"      # disk 模式下的文件路径

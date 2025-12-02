@@ -1,0 +1,4 @@
+# 前端打包输出目录
+# 将前端项目打包后的文件放到此目录
+# 构建命令: cd uac-frontend && pnpm build:antd
+# 然后复制: cp -r apps/web-antd/dist/* ../uac-backend/web/dist/
