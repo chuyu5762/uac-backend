@@ -32,6 +32,7 @@ type TokenClaims struct {
 	Email    string   `json:"email,omitempty"`
 	OrgID    string   `json:"org_id,omitempty"`
 	AppID    string   `json:"app_id,omitempty"`
+	ClientID string   `json:"client_id,omitempty"`
 	Scopes   []string `json:"scopes,omitempty"`
 	Type     string   `json:"type,omitempty"` // access, refresh, id
 }

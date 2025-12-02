@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
 	"log"
 	"net/http"
 	"os"
@@ -12,8 +14,12 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pu-ac-cn/uac-backend/internal/config"
 	"github.com/pu-ac-cn/uac-backend/internal/database"
+	"github.com/pu-ac-cn/uac-backend/internal/handler"
 	"github.com/pu-ac-cn/uac-backend/internal/middleware"
+	"github.com/pu-ac-cn/uac-backend/internal/model"
 	"github.com/pu-ac-cn/uac-backend/internal/redis"
+	"github.com/pu-ac-cn/uac-backend/internal/repository"
+	"github.com/pu-ac-cn/uac-backend/internal/service"
 	"github.com/pu-ac-cn/uac-backend/pkg/response"
 )
 
@@ -37,6 +43,53 @@ func main() {
 	}
 	defer redis.Close()
 	log.Println("Redis 连接成功")
+
+	// 自动迁移数据库表
+	if err := database.AutoMigrate(
+		&model.User{},
+		&model.Organization{},
+		&model.Application{},
+		&model.UserOrgBinding{},
+	); err != nil {
+		log.Fatalf("数据库迁移失败: %v", err)
+	}
+	log.Println("数据库迁移完成")
+
+	// 初始化 Repository
+	userRepo := repository.NewUserRepository(database.GetDB())
+	orgRepo := repository.NewOrganizationRepository(database.GetDB())
+	bindingRepo := repository.NewUserOrgBindingRepository(database.GetDB())
+
+	// 生成 RSA 密钥对（生产环境应从配置文件加载）
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		log.Fatalf("生成 RSA 密钥失败: %v", err)
+	}
+
+	// 初始化 Service
+	userService := service.NewUserService(userRepo, bindingRepo, orgRepo)
+	authService := service.NewAuthService(userRepo)
+	tokenService := service.NewTokenService(&service.TokenServiceConfig{
+		PrivateKey:    privateKey,
+		PublicKey:     &privateKey.PublicKey,
+		KeyID:         "key-1",
+		Issuer:        cfg.JWT.Issuer,
+		AccessExpiry:  cfg.JWT.AccessExpiry,
+		RefreshExpiry: cfg.JWT.RefreshExpiry,
+		CodeExpiry:    10 * time.Minute,
+	})
+
+	// 初始化应用服务
+	appRepo := repository.NewApplicationRepository(database.GetDB())
+	appService := service.NewApplicationService(appRepo, orgRepo)
+
+	// 初始化会话服务
+	sessionService := service.NewSessionService(redis.GetClient(), nil)
+
+	// 初始化 Handler
+	authHandler := handler.NewAuthHandler(userService, authService, tokenService)
+	oauthHandler := handler.NewOAuthHandler(appService, tokenService, sessionService)
+	oidcHandler := handler.NewOIDCHandler(userService, tokenService, cfg.JWT.Issuer)
 
 	// 设置 Gin 模式
 	if cfg.Server.Mode == "release" {
@@ -79,11 +132,40 @@ func main() {
 	// API 路由组
 	api := router.Group("/api/v1")
 	{
-		// TODO: 注册路由
 		api.GET("/ping", func(c *gin.Context) {
 			response.Success(c, "pong")
 		})
+
+		// 认证路由（公开）
+		auth := api.Group("/auth")
+		{
+			auth.POST("/register", authHandler.Register)
+			auth.POST("/login", authHandler.Login)
+			auth.POST("/refresh", authHandler.RefreshToken)
+		}
+
+		// 需要认证的路由
+		authRequired := api.Group("")
+		authRequired.Use(middleware.JWTAuth(tokenService))
+		{
+			authRequired.POST("/auth/logout", authHandler.Logout)
+			authRequired.GET("/auth/me", authHandler.GetCurrentUser)
+		}
 	}
+
+	// OAuth 2.0/2.1 路由
+	oauth := router.Group("/oauth")
+	{
+		oauth.GET("/authorize", middleware.OptionalJWTAuth(tokenService), oauthHandler.Authorize)
+		oauth.POST("/token", oauthHandler.Token)
+		oauth.POST("/revoke", oauthHandler.Revoke)
+		oauth.POST("/introspect", oauthHandler.Introspect)
+		oauth.GET("/userinfo", middleware.JWTAuth(tokenService), oidcHandler.UserInfo)
+	}
+
+	// OIDC 发现端点
+	router.GET("/.well-known/openid-configuration", oidcHandler.Discovery)
+	router.GET("/.well-known/jwks.json", oidcHandler.JWKS)
 
 	// 创建 HTTP 服务器
 	srv := &http.Server{
