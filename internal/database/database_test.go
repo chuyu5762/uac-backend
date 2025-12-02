@@ -11,11 +11,11 @@ func getTestPostgresConfig() *config.DatabaseConfig {
 	return &config.DatabaseConfig{
 		Driver: "postgres",
 		Postgres: config.PostgresConfig{
-			Host:     "localhost",
+			Host:     "1.95.88.239",
 			Port:     5432,
-			User:     "postgres",
-			Password: "",
-			DBName:   "unified_auth_test",
+			User:     "uac",
+			Password: "j4x3mdzttNnanCsB",
+			DBName:   "uac",
 			SSLMode:  "disable",
 		},
 	}
@@ -25,11 +25,11 @@ func getTestMySQLConfig() *config.DatabaseConfig {
 	return &config.DatabaseConfig{
 		Driver: "mysql",
 		MySQL: config.MySQLConfig{
-			Host:      "localhost",
+			Host:      "1.95.88.239",
 			Port:      3306,
-			User:      "root",
-			Password:  "",
-			DBName:    "unified_auth_test",
+			User:      "uac",
+			Password:  "j4x3mdzttNnanCsB",
+			DBName:    "uac",
 			Charset:   "utf8mb4",
 			ParseTime: true,
 			Loc:       "Local",

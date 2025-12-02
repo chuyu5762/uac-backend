@@ -12,8 +12,8 @@ import (
 // 注意：这些测试需要运行中的 Redis 实例
 func getTestConfig() *config.RedisConfig {
 	return &config.RedisConfig{
-		Addr:     "localhost:6379",
-		Password: "",
+		Addr:     "1.95.88.239:6379",
+		Password: "123456",
 		DB:       15, // 使用 DB 15 作为测试数据库，避免影响其他数据
 	}
 }
