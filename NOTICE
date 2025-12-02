@@ -1,0 +1,25 @@
+# 第三方库声明 / Third-Party Notices
+
+本项目使用了以下开源项目，特此声明并致谢：
+This project uses the following open source projects:
+
+## 后端依赖 / Backend Dependencies
+
+| 项目 | 许可证 | 地址 |
+|------|--------|------|
+| Gin | MIT | https://github.com/gin-gonic/gin |
+| GORM | MIT | https://github.com/go-gorm/gorm |
+| GORM Datatypes | MIT | https://github.com/go-gorm/datatypes |
+| GORM MySQL Driver | MIT | https://github.com/go-gorm/mysql |
+| GORM PostgreSQL Driver | MIT | https://github.com/go-gorm/postgres |
+| Viper | MIT | https://github.com/spf13/viper |
+| Zap | MIT | https://github.com/uber-go/zap |
+| JWT-Go v5 | MIT | https://github.com/golang-jwt/jwt |
+| Go-Redis v9 | BSD-2-Clause | https://github.com/redis/go-redis |
+| UUID | BSD-3-Clause | https://github.com/google/uuid |
+| Crypto | BSD-3-Clause | https://golang.org/x/crypto |
+| Validator v10 | MIT | https://github.com/go-playground/validator |
+| Gopter | MIT | https://github.com/leanovate/gopter |
+
+所有第三方库的版权归其原作者所有。
+All third-party libraries are copyrighted by their respective authors.

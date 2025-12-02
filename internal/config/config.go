@@ -1,6 +1,7 @@
 package config
 
 import (
+	"strings"
 	"time"
 
 	"github.com/spf13/viper"
@@ -13,6 +14,9 @@ type Config struct {
 	Redis    RedisConfig    `mapstructure:"redis"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 }
+
+// 全局配置实例
+var globalConfig *Config
 
 // ServerConfig 服务器配置
 type ServerConfig struct {
@@ -68,6 +72,8 @@ type JWTConfig struct {
 }
 
 // Load 加载配置
+// 支持从配置文件和环境变量加载配置
+// 环境变量格式：UAC_SERVER_ADDR, UAC_DATABASE_DRIVER 等
 func Load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
@@ -75,6 +81,10 @@ func Load() (*Config, error) {
 	viper.AddConfigPath(".")
 
 	// 支持环境变量覆盖
+	// 环境变量前缀为 UAC，使用下划线分隔
+	// 例如：UAC_SERVER_ADDR 对应 server.addr
+	viper.SetEnvPrefix("UAC")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
 	// 设置默认值
@@ -92,6 +102,40 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
+	// 保存全局配置实例
+	globalConfig = &cfg
+
+	return &cfg, nil
+}
+
+// Get 获取全局配置实例
+// 必须先调用 Load() 初始化配置
+func Get() *Config {
+	return globalConfig
+}
+
+// LoadFromFile 从指定路径加载配置文件
+func LoadFromFile(path string) (*Config, error) {
+	viper.SetConfigFile(path)
+
+	// 支持环境变量覆盖
+	viper.SetEnvPrefix("UAC")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
+
+	// 设置默认值
+	setDefaults()
+
+	if err := viper.ReadInConfig(); err != nil {
+		return nil, err
+	}
+
+	var cfg Config
+	if err := viper.Unmarshal(&cfg); err != nil {
+		return nil, err
+	}
+
+	globalConfig = &cfg
 	return &cfg, nil
 }
 

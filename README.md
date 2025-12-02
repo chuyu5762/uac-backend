@@ -77,6 +77,21 @@ curl http://localhost:8080/health
 - 每个文件不超过 1000 行
 - 遵循面向失败开发原则
 
-## 许可证
+## 致敬
 
-MIT
+本项目的开发离不开以下优秀开源项目的支持：
+
+| 项目 | 说明 | 地址 |
+|------|------|------|
+| Gin | Go 语言 Web 框架 | https://github.com/gin-gonic/gin |
+| GORM | Go 语言 ORM 框架 | https://github.com/go-gorm/gorm |
+| Viper | Go 配置管理库 | https://github.com/spf13/viper |
+| Zap | Go 高性能日志库 | https://github.com/uber-go/zap |
+| JWT-Go | Go JWT 实现 | https://github.com/golang-jwt/jwt |
+| Go-Redis | Go Redis 客户端 | https://github.com/redis/go-redis |
+
+感谢所有开源项目的贡献者！
+
+## 许可证 / License
+
+Apache License 2.0
