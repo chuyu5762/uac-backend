@@ -1,0 +1,42 @@
+# 二进制文件
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/build/
+
+# 测试文件
+*.test
+*.out
+coverage.txt
+coverage.html
+
+# 依赖
+/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# 配置文件（敏感信息）
+configs/config.local.yaml
+configs/keys/
+
+# 日志
+*.log
+logs/
+
+# 临时文件
+tmp/
+.tmp/
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
